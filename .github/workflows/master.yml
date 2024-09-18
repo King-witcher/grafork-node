@@ -1,0 +1,30 @@
+name: Build Release
+
+on:
+  push:
+    branches: [ 'master' ]
+
+jobs:
+
+  app_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Install protobuf
+        run: sudo apt-get install -y lld jq protobuf-compiler
+      - name: Cargo Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --bins --release
+      - name: Upload graph-node
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-node
+          path: target/release/graph-node
+      - name: Upload graphman
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphman
+          path: target/release/graphman
