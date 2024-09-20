@@ -3,7 +3,8 @@ use anyhow::{Context, Error};
 use graph::blockchain::client::ChainClient;
 use graph::blockchain::firehose_block_ingestor::{FirehoseBlockIngestor, Transforms};
 use graph::blockchain::{
-    BlockIngestor, BlockTime, BlockchainKind, ChainIdentifier, TriggersAdapterSelector,
+    BlockIngestor, BlockTime, BlockchainKind, ChainIdentifier, SubgraphSqlFilterTrait,
+    TriggersAdapterSelector,
 };
 use graph::components::adapter::ChainId;
 use graph::components::store::DeploymentCursorTracker;
@@ -47,6 +48,7 @@ use crate::data_source::UnresolvedDataSourceTemplate;
 use crate::ingestor::PollingBlockIngestor;
 use crate::network::EthereumNetworkAdapters;
 use crate::runtime::runtime_adapter::eth_call_gas;
+use crate::sql_client::filters::{DataSourceSqlFilter, EventHandlerSqlFilter, SubgraphSqlFilter};
 use crate::{
     adapter::EthereumAdapter as _,
     codec,
@@ -558,6 +560,31 @@ impl Blockchain for Chain {
         };
 
         Ok(ingestor)
+    }
+
+    fn get_sql_filter(data_sources: &[DataSource]) -> impl SubgraphSqlFilterTrait {
+        SubgraphSqlFilter {
+            cursor: None,
+            data_sources: data_sources
+                .iter()
+                .map(|ds| DataSourceSqlFilter {
+                    contract_address: ds.address,
+                    start_block: Some(ds.start_block),
+                    end_block: ds.end_block,
+                    event_handlers: ds
+                        .mapping
+                        .event_handlers
+                        .iter()
+                        .map(|handler| EventHandlerSqlFilter {
+                            topic0: handler.topic0(),
+                            topic1: handler.topic1.clone().unwrap_or(vec![]),
+                            topic2: handler.topic2.clone().unwrap_or(vec![]),
+                            topic3: handler.topic3.clone().unwrap_or(vec![]),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
     }
 }
 

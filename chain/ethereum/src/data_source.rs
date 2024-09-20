@@ -310,6 +310,11 @@ impl blockchain::DataSource<Chain> for DataSource {
             errors.push(SubgraphManifestValidationError::SourceAddressRequired.into());
         };
 
+        // Validate that there is no call or block handlers in the data source, which are not supported yet.
+        if has_call_handlers || has_block_handlers {
+            errors.push(SubgraphManifestValidationError::BlockAndCallHandlersNotSupported.into())
+        }
+
         // Ensure that there is at most one instance of each type of block handler
         // and that a combination of a non-filtered block handler and a filtered block handler is not allowed.
 

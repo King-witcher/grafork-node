@@ -7,6 +7,7 @@ mod env;
 mod ethereum_adapter;
 mod ingestor;
 pub mod runtime;
+pub mod sql_client;
 mod transport;
 
 pub use self::capabilities::NodeCapabilities;

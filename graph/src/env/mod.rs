@@ -221,6 +221,9 @@ pub struct EnvVars {
     /// How long do we wait for a response from the provider before considering that it is unavailable.
     /// Default is 30s.
     pub genesis_validation_timeout: Duration,
+
+    pub dune_api_key: String,
+    pub dune_query_limit: u32,
 }
 
 impl EnvVars {
@@ -305,6 +308,9 @@ impl EnvVars {
             firehose_grpc_max_decode_size_mb: inner.firehose_grpc_max_decode_size_mb,
             genesis_validation_enabled: inner.genesis_validation_enabled.0,
             genesis_validation_timeout: Duration::from_secs(inner.genesis_validation_timeout),
+
+            dune_api_key: inner.dune_api_key,
+            dune_query_limit: inner.dune_query_limit,
         })
     }
 
@@ -454,6 +460,10 @@ struct Inner {
     genesis_validation_enabled: EnvVarBoolean,
     #[envconfig(from = "GRAPH_NODE_GENESIS_VALIDATION_TIMEOUT_SECONDS", default = "30")]
     genesis_validation_timeout: u64,
+    #[envconfig(from = "DUNE_API_KEY")]
+    dune_api_key: String,
+    #[envconfig(from = "DUNE_QUERY_LIMIT", default = "1000000")]
+    dune_query_limit: u32,
 }
 
 #[derive(Clone, Debug)]

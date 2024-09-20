@@ -214,6 +214,24 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
     fn chain_client(&self) -> Arc<ChainClient<Self>>;
 
     async fn block_ingestor(&self) -> anyhow::Result<Box<dyn BlockIngestor>>;
+
+    /// Gets a filter that can be converted into SQL
+    fn get_sql_filter(_data_sources: &[Self::DataSource]) -> impl SubgraphSqlFilterTrait {
+        unimplemented!("not implemented");
+    }
+}
+
+pub trait SubgraphSqlFilterTrait: Send + Sync {
+    type QueryResult;
+    fn to_sql(&self) -> String;
+}
+
+// Workaround to make the default implementation compile.
+impl SubgraphSqlFilterTrait for () {
+    type QueryResult = ();
+    fn to_sql(&self) -> String {
+        String::new()
+    }
 }
 
 #[derive(Error, Debug)]

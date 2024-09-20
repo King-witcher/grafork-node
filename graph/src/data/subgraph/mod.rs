@@ -356,6 +356,10 @@ pub enum SubgraphManifestValidationError {
     FeatureValidationError(#[from] SubgraphFeatureValidationError),
     #[error("data source {0} is invalid: {1}")]
     DataSourceValidation(String, Error),
+    #[error("block and call handlers are not supported by Orium")]
+    BlockAndCallHandlersNotSupported,
+    #[error("Orium only supports Ethereum blockchains")]
+    BlockchainNotSupported,
 }
 
 #[derive(Error, Debug)]
