@@ -1015,6 +1015,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dev"
+version = "0.1.0"
+dependencies = [
+ "graph",
+ "graph-chain-ethereum",
+]
+
+[[package]]
 name = "diesel"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

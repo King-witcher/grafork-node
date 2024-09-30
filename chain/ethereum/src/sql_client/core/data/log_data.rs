@@ -17,7 +17,7 @@ pub struct LogData {
     pub block_timestamp: String,
 
     // Transaction
-    pub tx_index: Option<i64>,
+    pub tx_index: u64,
     pub tx_hash: Option<String>,
     pub tx_gas_used: i64,
     pub tx_from: Option<String>,

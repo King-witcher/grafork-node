@@ -12,8 +12,8 @@ members = [
     "graph",
     "tests",
     "graph/derive",
+    "dev",
 ]
-exclude = ["dev"]
 
 [workspace.package]
 version = "0.35.0"

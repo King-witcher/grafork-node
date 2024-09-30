@@ -224,8 +224,4 @@ impl BlockchainSqlApi for DuneApi {
             }
         }
     }
-
-    fn get_result_stream(&self, execution_id: String) -> DuneResultStream {
-        DuneResultStream::new(self.clone(), execution_id)
-    }
 }

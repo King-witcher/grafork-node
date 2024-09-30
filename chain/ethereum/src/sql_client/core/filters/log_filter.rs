@@ -1,7 +1,6 @@
 use graph::prelude::*;
 
-use crate::sql_client::core::data::LogData;
-use graph::blockchain::SubgraphSqlFilterTrait;
+use graph::blockchain::ToSqlFilter;
 use graph::itertools::Itertools;
 use graph::prelude::ethabi::ethereum_types::H256;
 use web3::types::Address;
@@ -30,9 +29,7 @@ pub struct EventHandlerSqlFilter {
     pub topic3: Vec<H256>,
 }
 
-impl SubgraphSqlFilterTrait for SubgraphSqlFilter {
-    type QueryResult = LogData;
-
+impl ToSqlFilter for SubgraphSqlFilter {
     fn to_sql(&self) -> String {
         let mut result = String::new();
 
@@ -88,8 +85,10 @@ impl DataSourceSqlFilter {
                 .map(EventHandlerSqlFilter::to_sql)
                 .collect_vec()
                 .join(" OR ");
-            clauses.push(handlers_clause);
+
+            clauses.push(format!("({})", handlers_clause));
         }
+
         format!("({})", clauses.join(" AND "))
     }
 }

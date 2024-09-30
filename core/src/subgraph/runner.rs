@@ -2,7 +2,7 @@ use crate::subgraph::context::IndexingContext;
 use crate::subgraph::error::BlockProcessingError;
 use crate::subgraph::inputs::IndexingInputs;
 use crate::subgraph::state::IndexingState;
-use crate::subgraph::stream::new_block_stream;
+use crate::subgraph::stream::{new_block_stream, new_sql_stream};
 use atomic_refcell::AtomicRefCell;
 use graph::blockchain::block_stream::{
     BlockStreamError, BlockStreamEvent, BlockWithTriggers, FirehoseCursor,
@@ -25,6 +25,7 @@ use graph::data_source::{
 use graph::env::EnvVars;
 use graph::futures03::stream::StreamExt;
 use graph::futures03::TryStreamExt;
+use graph::itertools::Itertools;
 use graph::prelude::*;
 use graph::schema::EntityKey;
 use graph::util::{backoff::ExponentialBackoff, lfu_cache::LfuCache};
@@ -207,14 +208,28 @@ where
             // TriggerFilter needs to be rebuilt eveytime the blockstream is restarted
             self.ctx.filter = Some(self.build_filter());
 
-            let mut block_stream = new_block_stream(
-                &self.inputs,
-                self.ctx.filter.as_ref().unwrap(), // Safe to unwrap as we just called `build_filter` in the previous line
-                &self.metrics.subgraph,
-            )
-            .await?
-            .map_err(CancelableError::from)
-            .cancelable(&block_stream_canceler, || Err(CancelableError::Cancel));
+            let ds = self
+                .ctx
+                .onchain_data_sources()
+                .map(Clone::clone)
+                .collect_vec();
+
+            // let filter = self.ctx.filter.as_ref().unwrap();
+
+            let sql = C::get_sql_filter(&ds);
+            let mut sql_block_stream = new_sql_stream(&self.inputs, sql, &self.metrics.subgraph)
+                .await?
+                .map_err(CancelableError::from)
+                .cancelable(&block_stream_canceler, || Err(CancelableError::Cancel));
+
+            // let mut block_stream = new_block_stream(
+            //     &self.inputs,
+            //     self.ctx.filter.as_ref().unwrap(), // Safe to unwrap as we just called `build_filter` in the previous line
+            //     &self.metrics.subgraph,
+            // )
+            // .await?
+            // .map_err(CancelableError::from)
+            // .cancelable(&block_stream_canceler, || Err(CancelableError::Cancel));
 
             // Keep the stream's cancel guard around to be able to shut it down when the subgraph
             // deployment is unassigned
@@ -229,7 +244,7 @@ where
                 let event = {
                     let _section = self.metrics.stream.stopwatch.start_section("scan_blocks");
 
-                    block_stream.next().await
+                    sql_block_stream.next().await
                 };
 
                 // TODO: move cancel handle to the Context

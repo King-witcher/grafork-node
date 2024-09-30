@@ -216,19 +216,26 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
     async fn block_ingestor(&self) -> anyhow::Result<Box<dyn BlockIngestor>>;
 
     /// Gets a filter that can be converted into SQL
-    fn get_sql_filter(_data_sources: &[Self::DataSource]) -> impl SubgraphSqlFilterTrait {
+    fn get_sql_filter(_data_sources: &[Self::DataSource]) -> Box<dyn ToSqlFilter> {
         unimplemented!("not implemented");
+    }
+
+    /// Gets an ethereum sql stream
+    async fn new_sql_block_stream(
+        &self,
+        _filter: Box<dyn ToSqlFilter>,
+    ) -> Result<Box<dyn BlockStream<Self>>, Error> {
+        Err(anyhow!("not implemented"))
     }
 }
 
-pub trait SubgraphSqlFilterTrait: Send + Sync {
-    type QueryResult;
+/// Represents all types that can be converted into and SQL filter.
+pub trait ToSqlFilter: Send + Sync {
     fn to_sql(&self) -> String;
 }
 
 // Workaround to make the default implementation compile.
-impl SubgraphSqlFilterTrait for () {
-    type QueryResult = ();
+impl ToSqlFilter for () {
     fn to_sql(&self) -> String {
         String::new()
     }

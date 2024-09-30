@@ -1,7 +1,7 @@
 use graph::prelude::*;
 
 use crate::sql_client::core::data::LogData;
-use graph::blockchain::SubgraphSqlFilterTrait;
+use graph::blockchain::ToSqlFilter;
 use std;
 use std::cmp::PartialEq;
 use std::future::Future;
@@ -61,10 +61,10 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
     > + Send;
 
     /// Interacts with the api to get all results from a specific query filter.
-    fn execute_query_and_get_results<T: SubgraphSqlFilterTrait>(
+    fn execute_query_and_get_results(
         &self,
         logger: &Logger,
-        filter: &T,
+        filter: &Box<dyn ToSqlFilter>,
         polling_interval: u64,
     ) -> impl Future<Output = Result<Vec<LogData>, SqlClientError>> + Send
     where
@@ -133,12 +133,4 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
             Ok(results)
         }
     }
-
-    /// Returns a stream of query results when the query is ready.
-    /// Obsolete
-    #[deprecated(since = "0.0.0", note = "please use `get_execution_result` instead")]
-    fn get_result_stream(
-        &self,
-        execution_id: String,
-    ) -> impl Stream<Item = Result<LogData, SqlClientError>>;
 }
