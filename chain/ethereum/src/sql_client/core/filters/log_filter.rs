@@ -1,6 +1,6 @@
 use graph::prelude::*;
 
-use graph::blockchain::ToSqlFilter;
+use graph::blockchain::SqlFilterWithCursor;
 use graph::itertools::Itertools;
 use graph::prelude::ethabi::ethereum_types::H256;
 use web3::types::Address;
@@ -29,7 +29,7 @@ pub struct EventHandlerSqlFilter {
     pub topic3: Vec<H256>,
 }
 
-impl ToSqlFilter for SubgraphSqlFilter {
+impl SqlFilterWithCursor for SubgraphSqlFilter {
     fn to_sql(&self) -> String {
         let mut result = String::new();
 
@@ -52,6 +52,14 @@ impl ToSqlFilter for SubgraphSqlFilter {
         }
 
         result
+    }
+
+    fn cursor(&self) -> Option<(i32, i32)> {
+        self.cursor
+    }
+
+    fn set_cursor(&mut self, cursor: Option<(i32, i32)>) {
+        self.cursor = cursor;
     }
 }
 

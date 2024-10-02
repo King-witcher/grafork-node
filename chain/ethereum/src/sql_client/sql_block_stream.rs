@@ -4,7 +4,7 @@ use crate::Chain;
 use graph::blockchain::block_stream::{
     BlockStream, BlockStreamError, BlockStreamEvent, BlockWithTriggers, FirehoseCursor,
 };
-use graph::blockchain::ToSqlFilter;
+use graph::blockchain::SqlFilterWithCursor;
 use graph::prelude::*;
 use graph::{
     futures03::stream,
@@ -27,7 +27,7 @@ pub struct UnfoldingQueryStream {
 struct StreamContext<Api: BlockchainSqlApi> {
     api: Api,
     logger: Logger,
-    filter: Box<dyn ToSqlFilter>,
+    filter: Box<dyn SqlFilterWithCursor>,
     results: VecDeque<Vec<LogData>>,
     is_last_query: bool,
 }
@@ -231,7 +231,7 @@ fn create_block_stream_event(
 impl UnfoldingQueryStream {
     pub fn from_sql_api<Api: BlockchainSqlApi>(
         logger: &Logger,
-        filter: Box<dyn ToSqlFilter>,
+        filter: Box<dyn SqlFilterWithCursor>,
         api: Api,
     ) -> Self {
         let ctx = StreamContext {

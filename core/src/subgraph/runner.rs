@@ -200,6 +200,9 @@ where
             }
         }
 
+        // Runs the SQL Block Stream first.
+        self.run_sql().await?;
+
         loop {
             debug!(self.logger, "Starting or restarting subgraph");
 
@@ -208,28 +211,14 @@ where
             // TriggerFilter needs to be rebuilt eveytime the blockstream is restarted
             self.ctx.filter = Some(self.build_filter());
 
-            let ds = self
-                .ctx
-                .onchain_data_sources()
-                .map(Clone::clone)
-                .collect_vec();
-
-            // let filter = self.ctx.filter.as_ref().unwrap();
-
-            let sql = C::get_sql_filter(&ds);
-            let mut sql_block_stream = new_sql_stream(&self.inputs, sql, &self.metrics.subgraph)
-                .await?
-                .map_err(CancelableError::from)
-                .cancelable(&block_stream_canceler, || Err(CancelableError::Cancel));
-
-            // let mut block_stream = new_block_stream(
-            //     &self.inputs,
-            //     self.ctx.filter.as_ref().unwrap(), // Safe to unwrap as we just called `build_filter` in the previous line
-            //     &self.metrics.subgraph,
-            // )
-            // .await?
-            // .map_err(CancelableError::from)
-            // .cancelable(&block_stream_canceler, || Err(CancelableError::Cancel));
+            let mut block_stream = new_block_stream(
+                &self.inputs,
+                self.ctx.filter.as_ref().unwrap(), // Safe to unwrap as we just called `build_filter` in the previous line
+                &self.metrics.subgraph,
+            )
+            .await?
+            .map_err(CancelableError::from)
+            .cancelable(&block_stream_canceler, || Err(CancelableError::Cancel));
 
             // Keep the stream's cancel guard around to be able to shut it down when the subgraph
             // deployment is unassigned
@@ -241,11 +230,8 @@ where
 
             // Process events from the stream as long as no restart is needed
             loop {
-                let event = {
-                    let _section = self.metrics.stream.stopwatch.start_section("scan_blocks");
-
-                    sql_block_stream.next().await
-                };
+                self.metrics.stream.stopwatch.start_section("scan_blocks");
+                let event = block_stream.next().await;
 
                 // TODO: move cancel handle to the Context
                 // This will require some code refactor in how the BlockStream is created
@@ -285,6 +271,76 @@ where
                 };
             }
         }
+    }
+
+    async fn run_sql(&mut self) -> Result<(), Error> {
+        debug!(self.logger, "starting SQL stream");
+        let block_stream_canceler = CancelGuard::new();
+        let block_stream_cancel_handle = block_stream_canceler.handle();
+
+        let data_sources = self
+            .ctx
+            .onchain_data_sources()
+            .map(Clone::clone)
+            .collect_vec();
+
+        let mut sql_filter = C::get_sql_filter(&data_sources);
+
+        // Gets the current block and uses it as the cursor for the sql block stream.
+        let cursor = match self.inputs.store.block_ptr() {
+            Some(block_ptr) => Some((block_ptr.number + 1, 0)),
+            None => None,
+        };
+        sql_filter.set_cursor(cursor);
+
+        let mut sql_block_stream = new_sql_stream(&self.inputs, sql_filter, &self.metrics.subgraph)
+            .await?
+            .map_err(CancelableError::from)
+            .cancelable(&block_stream_canceler, || Err(CancelableError::Cancel));
+
+        // Process events from the stream as long as no restart is needed
+        while let Some(event) = sql_block_stream.next().await {
+            debug!(
+                self.logger,
+                "Current block: {:?}",
+                self.inputs.store.block_ptr()
+            );
+            // TODO: move cancel handle to the Context
+            // This will require some code refactor in how the BlockStream is created
+            let block_start = Instant::now();
+            match self
+                .handle_stream_event(Some(event), &block_stream_cancel_handle)
+                .await
+                .map(|res| {
+                    self.metrics
+                        .subgraph
+                        .observe_block_processed(block_start.elapsed(), res.block_finished());
+                    res
+                })? {
+                Action::Continue => {
+                    continue;
+                }
+                Action::Stop => {
+                    info!(self.logger, "stopping subgraph during SQL Stream");
+                    self.inputs.store.flush().await?;
+                    return Err(anyhow!("subgraph stopped during SQL Stream"));
+                }
+                Action::Restart => {
+                    info!(
+                        self.logger,
+                        "stopping subgraph due to Restart signal on SQL Stream"
+                    );
+                    self.inputs.store.flush().await?;
+                    return Err(anyhow!(
+                        "subgraph stopped due to Restart signal on SQL Stream"
+                    ));
+                }
+            };
+        }
+
+        debug!(self.logger, "SQL stream exhausted");
+
+        Ok(())
     }
 
     /// Processes a block and returns the updated context and a boolean flag indicating

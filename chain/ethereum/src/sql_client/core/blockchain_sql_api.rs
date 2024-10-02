@@ -1,14 +1,13 @@
 use graph::prelude::*;
 
 use crate::sql_client::core::data::LogData;
-use graph::blockchain::ToSqlFilter;
+use graph::blockchain::SqlFilterWithCursor;
 use std;
 use std::cmp::PartialEq;
 use std::future::Future;
 use std::time::{Duration, Instant};
 use tokio;
 use tokio::time;
-use web3::futures::Stream;
 
 use crate::sql_client::core::SqlClientError;
 
@@ -64,7 +63,7 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
     fn execute_query_and_get_results(
         &self,
         logger: &Logger,
-        filter: &Box<dyn ToSqlFilter>,
+        filter: &Box<dyn SqlFilterWithCursor>,
         polling_interval: u64,
     ) -> impl Future<Output = Result<Vec<LogData>, SqlClientError>> + Send
     where

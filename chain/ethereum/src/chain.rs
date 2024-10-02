@@ -3,7 +3,8 @@ use anyhow::{Context, Error};
 use graph::blockchain::client::ChainClient;
 use graph::blockchain::firehose_block_ingestor::{FirehoseBlockIngestor, Transforms};
 use graph::blockchain::{
-    BlockIngestor, BlockTime, BlockchainKind, ChainIdentifier, ToSqlFilter, TriggersAdapterSelector,
+    BlockIngestor, BlockTime, BlockchainKind, ChainIdentifier, SqlFilterWithCursor,
+    TriggersAdapterSelector,
 };
 use graph::components::adapter::ChainId;
 use graph::components::store::DeploymentCursorTracker;
@@ -564,7 +565,7 @@ impl Blockchain for Chain {
         Ok(ingestor)
     }
 
-    fn get_sql_filter(data_sources: &[DataSource]) -> Box<dyn ToSqlFilter> {
+    fn get_sql_filter(data_sources: &[DataSource]) -> Box<dyn SqlFilterWithCursor> {
         Box::new(SubgraphSqlFilter {
             cursor: None,
             data_sources: data_sources
@@ -591,7 +592,7 @@ impl Blockchain for Chain {
 
     async fn new_sql_block_stream(
         &self,
-        filter: Box<dyn ToSqlFilter>,
+        filter: Box<dyn SqlFilterWithCursor>,
     ) -> Result<Box<dyn BlockStream<Self>>, Error> {
         let logger = self.logger_factory.component_logger("SqlBlockStream", None);
         let api = DuneApi::new(&logger);

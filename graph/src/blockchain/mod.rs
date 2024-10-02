@@ -216,28 +216,41 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
     async fn block_ingestor(&self) -> anyhow::Result<Box<dyn BlockIngestor>>;
 
     /// Gets a filter that can be converted into SQL
-    fn get_sql_filter(_data_sources: &[Self::DataSource]) -> Box<dyn ToSqlFilter> {
+    fn get_sql_filter(_data_sources: &[Self::DataSource]) -> Box<dyn SqlFilterWithCursor> {
         unimplemented!("not implemented");
     }
 
     /// Gets an ethereum sql stream
     async fn new_sql_block_stream(
         &self,
-        _filter: Box<dyn ToSqlFilter>,
+        _filter: Box<dyn SqlFilterWithCursor>,
     ) -> Result<Box<dyn BlockStream<Self>>, Error> {
         Err(anyhow!("not implemented"))
     }
 }
 
 /// Represents all types that can be converted into and SQL filter.
-pub trait ToSqlFilter: Send + Sync {
+pub trait SqlFilterWithCursor: Send + Sync {
     fn to_sql(&self) -> String;
+
+    /// Gets the cursor of the filter as a tuple of (block_number, log_index).
+    fn cursor(&self) -> Option<(i32, i32)>;
+
+    fn set_cursor(&mut self, filter: Option<(i32, i32)>);
 }
 
 // Workaround to make the default implementation compile.
-impl ToSqlFilter for () {
+impl SqlFilterWithCursor for () {
     fn to_sql(&self) -> String {
         String::new()
+    }
+
+    fn cursor(&self) -> Option<(i32, i32)> {
+        unimplemented!()
+    }
+
+    fn set_cursor(&mut self, _: Option<(i32, i32)>) {
+        unimplemented!()
     }
 }
 
