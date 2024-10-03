@@ -79,7 +79,7 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
             let mut last_status: Option<QueryExecutionStatus> = None;
             let mut poll_count = 0u32;
             let start_time = Instant::now();
-            let _size = loop {
+            let size = loop {
                 let status = self.get_execution_status(&execution_id).await?;
 
                 if Some(status) != last_status || poll_count % 30 == 0 {
@@ -114,14 +114,16 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
             let mut results: Vec<LogData> = Vec::new();
             let mut cursor = None;
 
-            loop {
-                let (mut new_results, next_cursor) =
-                    self.get_execution_result(&execution_id, cursor).await?;
-                results.append(&mut new_results);
-                if next_cursor.is_none() {
-                    break;
+            if size > 0 {
+                loop {
+                    let (mut new_results, next_cursor) =
+                        self.get_execution_result(&execution_id, cursor).await?;
+                    results.append(&mut new_results);
+                    if next_cursor.is_none() {
+                        break;
+                    }
+                    cursor = next_cursor;
                 }
-                cursor = next_cursor;
             }
 
             info!(
