@@ -117,7 +117,6 @@ fn get_timestamp_from_string(string: &str) -> U256 {
 impl From<&LogData> for LightEthereumBlock {
     /// Creates a new LightEthereumBlock from a log_data, ignoraing the transaction data contained in log_data.
     fn from(log_data: &LogData) -> Self {
-        println!("{}", log_data.block_timestamp);
         Self {
             hash: Some(H256::from_str(&log_data.block_hash).expect("failed to parse block hash")),
             parent_hash: H256::from_str(&log_data.parent_hash)
