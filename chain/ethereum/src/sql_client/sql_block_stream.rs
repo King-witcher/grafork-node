@@ -1,6 +1,7 @@
 use crate::chain::BlockFinality;
 use crate::trigger::{EthereumTrigger, LogRef};
 use crate::Chain;
+use chrono::{DateTime, Utc};
 use graph::blockchain::block_stream::{
     BlockStream, BlockStreamError, BlockStreamEvent, BlockWithTriggers, FirehoseCursor,
 };
@@ -99,20 +100,30 @@ impl From<&LogData> for Transaction {
             raw: None,
             transaction_type: None,
             access_list: None,
-            max_fee_per_gas: None,
-            max_priority_fee_per_gas: None,
+            max_fee_per_gas: value.max_fee_per_gas.map(U256::from),
+            max_priority_fee_per_gas: value.max_priority_fee_per_gas.map(U256::from),
         }
     }
+}
+
+fn get_timestamp_from_string(string: &str) -> U256 {
+    string
+        .parse::<DateTime<Utc>>()
+        .expect(&format!("failed to parse timestamp {string}"))
+        .timestamp()
+        .into()
 }
 
 impl From<&LogData> for LightEthereumBlock {
     /// Creates a new LightEthereumBlock from a log_data, ignoraing the transaction data contained in log_data.
     fn from(log_data: &LogData) -> Self {
+        println!("{}", log_data.block_timestamp);
         Self {
-            hash: Some(H256::from_str(&log_data.block_hash).expect("failed to parse block_hash")),
-            parent_hash: H256::zero(),
+            hash: Some(H256::from_str(&log_data.block_hash).expect("failed to parse block hash")),
+            parent_hash: H256::from_str(&log_data.parent_hash)
+                .expect("failed to parse parent hash"),
             uncles_hash: H256::zero(),
-            author: H160::zero(),
+            author: H160::from_str(&log_data.miner).expect("failed to parse miner/author"),
             state_root: H256::zero(),
             transactions_root: H256::zero(),
             receipts_root: H256::zero(),
@@ -126,14 +137,11 @@ impl From<&LogData> for LightEthereumBlock {
                 .map_or(None, |value| Some(U256::from(value))),
             extra_data: Bytes(vec![]),
             logs_bloom: None,
-            // timestamp: U256::from_str(&log_data.block_timestamp)
-            //     .expect("failed to parse block timestamp"),
-            timestamp: U256::from(0),
+            timestamp: get_timestamp_from_string(&log_data.block_timestamp),
             difficulty: U256::from(log_data.difficulty),
-            total_difficulty: log_data
-                .total_difficulty
-                .clone()
-                .map_or(None, |value| Some(U256::from_str(&value).expect("msg"))),
+            total_difficulty: log_data.total_difficulty.clone().map_or(None, |value| {
+                Some(U256::from_str(&value).expect("failed to parse total difficulty"))
+            }),
             seal_fields: vec![],
             uncles: vec![],
             transactions: vec![],
@@ -141,9 +149,10 @@ impl From<&LogData> for LightEthereumBlock {
                 .block_size
                 .map_or(None, |size| Some(U256::from(size))),
             mix_hash: None,
-            nonce: log_data.block_nonce.clone().map_or(None, |nonce| {
-                Some(H64::from_str(&nonce).expect("failed to parse block nonce"))
-            }),
+            nonce: log_data
+                .block_nonce
+                .clone()
+                .map(|nonce| H64::from_str(&nonce).expect("failed to parse block nonce")),
         }
     }
 }
@@ -168,11 +177,12 @@ impl From<&LogData> for Log {
         }
 
         Log {
-            address: H160::from_str(&value.log_address).expect("failed to parse H160"),
+            address: H160::from_str(&value.log_address).expect("failed to parse log address"),
             topics,
-            data: serde_json::from_str(&format!("\"{}\"", value.log_data)).unwrap(), // ?
+            data: serde_json::from_str(&format!("\"{}\"", value.log_data))
+                .expect("failed to deserialize log data"),
             block_hash: Some(
-                H256::from_str(&value.block_hash).expect("failed to parse block_hash"),
+                H256::from_str(&value.block_hash).expect("failed to parse block hash"),
             ),
             block_number: Some(U64::from(value.block_number)),
             transaction_hash: value.tx_hash.clone().map_or(None, |hash| {
@@ -272,10 +282,8 @@ impl UnfoldingQueryStream {
         if ctx.results.len() != 0 {
             let last = ctx.results.pop_front();
             if last.is_some() {
-                return Some((
-                    Ok(create_block_stream_event(last.unwrap().into_iter())),
-                    ctx,
-                ));
+                let last = last.unwrap();
+                return Some((Ok(create_block_stream_event(last.into_iter())), ctx));
             } else {
                 return None;
             }
