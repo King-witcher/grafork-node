@@ -98,7 +98,20 @@ impl From<&LogData> for Transaction {
             r: None,
             s: None,
             raw: None,
-            transaction_type: None,
+            transaction_type: Some(U64::from(
+                match value
+                    .tx_type
+                    .clone()
+                    .unwrap_or(String::from("Legacy"))
+                    .as_str()
+                {
+                    "Legacy" => 0,
+                    "AccessList" => 1,
+                    "DynamicFee" => 2,
+                    "3" => 3,
+                    _ => 0,
+                },
+            )),
             access_list: None,
             max_fee_per_gas: value.max_fee_per_gas.map(U256::from),
             max_priority_fee_per_gas: value.max_priority_fee_per_gas.map(U256::from),
