@@ -1,4 +1,4 @@
-mod adapter;
+pub mod adapter;
 mod buffered_call_cache;
 mod capabilities;
 pub mod codec;
