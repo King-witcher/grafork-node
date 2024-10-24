@@ -231,6 +231,8 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
 
 /// Represents all types that can be converted into and SQL filter.
 pub trait SqlFilterWithCursor: Send + Sync {
+    fn network(&self) -> String;
+
     fn to_sql(&self) -> String;
 
     /// Gets the cursor of the filter as a tuple of (block_number, log_index).
@@ -241,6 +243,10 @@ pub trait SqlFilterWithCursor: Send + Sync {
 
 // Workaround to make the default implementation compile.
 impl SqlFilterWithCursor for () {
+    fn network(&self) -> String {
+        String::new()
+    }
+
     fn to_sql(&self) -> String {
         String::new()
     }

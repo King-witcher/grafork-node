@@ -571,6 +571,7 @@ impl Blockchain for Chain {
             data_sources: data_sources
                 .iter()
                 .map(|ds| DataSourceSqlFilter {
+                    network: ds.network.clone().unwrap_or(String::new()),
                     contract_address: ds.address,
                     start_block: Some(ds.start_block),
                     end_block: ds.end_block,

@@ -37,7 +37,7 @@ impl<Api: BlockchainSqlApi> StreamContext<Api> {
     async fn fetch_more(&mut self) -> Result<(), SqlClientError> {
         let logs_data = self
             .api
-            .execute_query_and_get_results(&self.logger, &self.filter, 1)
+            .execute_query_and_get_results(&self.logger, &self.filter)
             .await?;
         // If the api has returned less results than the maximum, set the is_last_query flag.
         if logs_data.len() < Api::max_results() as usize {

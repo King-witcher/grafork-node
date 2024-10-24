@@ -16,6 +16,8 @@ pub struct SubgraphSqlFilter {
 }
 
 pub struct DataSourceSqlFilter {
+    /// The network, analogous to the manifest.
+    pub network: String,
     pub contract_address: Option<Address>,
     pub start_block: Option<i32>,
     pub end_block: Option<i32>,
@@ -30,6 +32,15 @@ pub struct EventHandlerSqlFilter {
 }
 
 impl SqlFilterWithCursor for SubgraphSqlFilter {
+    fn network(&self) -> String {
+        if self.data_sources.len() == 0 {
+            String::new()
+        } else {
+            // Since all datasources must have the same network, it's safe to use the network of the first one.
+            self.data_sources[0].network.clone()
+        }
+    }
+
     fn to_sql(&self) -> String {
         let mut result = String::new();
 

@@ -36,3 +36,5 @@ logfile
 
 # Dev testing folder
 /dev/target
+
+/run-*.sh

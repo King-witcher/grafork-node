@@ -1,18 +1,15 @@
-mod dune_result_stream;
-
 use graph::prelude::*;
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder};
 
-use crate::sql_client::core::data::LogData;
 use crate::sql_client::core::{BlockchainSqlApi, QueryExecutionStatus, SqlClientError};
-pub use dune_result_stream::*;
+use crate::sql_client::SqlClientResult;
 
+use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
 
-const LOG_QUERY_ID: &str = "4041328";
 const BASE_URL: &str = "https://api.dune.com/api/v1";
 const PAGE_SIZE: u16 = 10_000;
 const DUNE_ENGINE_TYPE: &str = "medium";
@@ -38,21 +35,32 @@ struct GetExecutionStatusResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ExecutionResult {
-    pub rows: Vec<LogData>,
+pub struct ExecutionResult<T> {
+    pub rows: Vec<T>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetExecutionResultResponse {
+pub struct GetExecutionResultResponse<T> {
     query_id: i64,
     next_offset: Option<i64>,
     execution_id: String,
-    result: ExecutionResult,
+    result: ExecutionResult<T>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ErrorResponse {
     error: String,
+}
+
+/// Extension trait that allows to authenticate a Reqwest RequestBuilder with dune credentials
+trait ReqwestExt {
+    fn authenticate(self) -> Self;
+}
+
+impl ReqwestExt for RequestBuilder {
+    fn authenticate(self) -> Self {
+        self.header("x-dune-api-key", &ENV_VARS.dune_api_key)
+    }
 }
 
 impl DuneApi {
@@ -65,6 +73,52 @@ impl DuneApi {
             reqwest: client,
         }
     }
+
+    async fn execute_query(
+        &self,
+        query_id: &str,
+        parameters: serde_json::Value,
+    ) -> SqlClientResult<String> {
+        info!(
+            self.logger,
+            "running query {} with parameters {}", query_id, parameters
+        );
+
+        let url = format!("{}/query/{}/execute", BASE_URL, query_id);
+
+        let json_body = json!({
+            "query_parameters": parameters,
+            "performance": DUNE_ENGINE_TYPE,
+        });
+
+        let req = self.reqwest.post(url).json(&json_body).authenticate();
+        let res = req.send().await?;
+
+        let status = res.status();
+        let mut object = res.json::<HashMap<String, String>>().await?;
+        match status.is_success() {
+            true => {
+                let execution_id = object.remove("execution_id").unwrap();
+                info!(self.logger, "got execution id {execution_id} for query {query_id} with parameters {parameters}");
+                Ok(execution_id)
+            }
+            false => {
+                let message = object.remove("error").unwrap_or(String::from("unknown"));
+                error!(self.logger, "failed to execute query on Dune: {message}");
+                Err(SqlClientError::ResponseError(status, message))
+            }
+        }
+    }
+
+    fn get_dune_blockchain_id(network: &str) -> SqlClientResult<String> {
+        match network {
+            "mainnet" => Ok(String::from("ethereum")),
+            "matic" => Ok(String::from("polygon")),
+            "arbitrum-one" => Ok(String::from("arbitrum")),
+            "optimism" => Ok(String::from("optimism")),
+            _ => Err(SqlClientError::NotSupportedNetwork(String::from(network))),
+        }
+    }
 }
 
 impl BlockchainSqlApi for DuneApi {
@@ -74,52 +128,53 @@ impl BlockchainSqlApi for DuneApi {
         ENV_VARS.dune_query_limit
     }
 
-    async fn execute_query(&self, filter: &str) -> Result<String, SqlClientError> {
-        info!(
-            self.logger,
-            "executing query {LOG_QUERY_ID} with filter {filter}"
-        );
+    async fn execute_get_block_ranges(
+        &self,
+        filter: &str,
+        network: &str,
+    ) -> SqlClientResult<String> {
+        info!(self.logger, "querying block ranges on Dune");
 
-        let json_body = json!({
-            "query_parameters": {
-                "filter": format!("{}", filter)
-            },
-            "performance": DUNE_ENGINE_TYPE,
+        let blockchain_id = DuneApi::get_dune_blockchain_id(network)?;
+        let params = json!({
+            "blockchain_id": blockchain_id,
+            "chunk_size": &ENV_VARS.dune_query_limit,
+            "filter": filter,
         });
 
-        let req = self
-            .reqwest
-            .post(format!("{}/query/{}/execute", BASE_URL, LOG_QUERY_ID))
-            .json(&json_body)
-            .header("X-Dune-API-Key", &ENV_VARS.dune_api_key);
+        self.execute_query(&ENV_VARS.dune_block_ranges_query, params)
+            .await
+    }
 
-        let res = req.send().await?;
-        let status = res.status();
-        let mut object = res.json::<HashMap<String, String>>().await?;
-
-        match status.is_success() {
-            true => {
-                let execution_id = object.remove("execution_id").unwrap();
-                info!(self.logger, "got execution id: {execution_id}");
-                Ok(execution_id)
-            }
-            false => {
-                let message = object.remove("error").unwrap_or(String::from("unknown"));
-                error!(self.logger, "error on execute query: {message}");
-                Err(SqlClientError::ResponseError(status, message))
-            }
+    async fn execute_get_logs(&self, filter: &str) -> SqlClientResult<String> {
+        if let Some(execution_id) = &ENV_VARS.dune_force_execution_id {
+            warn!(
+                self.logger,
+                "skipping get_logs because execution_id is forced to be {execution_id}"
+            );
+            return Ok(String::from(execution_id));
         }
+
+        info!(self.logger, "querying logs on Dune with filter {filter}");
+
+        let params = json!({
+            "filter": filter
+        });
+
+        self.execute_query(&ENV_VARS.dune_logs_query, params).await
     }
 
     async fn get_execution_status(
         &self,
-        execution_id: &str,
-    ) -> Result<QueryExecutionStatus, SqlClientError> {
+        execution_id: &String,
+    ) -> SqlClientResult<QueryExecutionStatus> {
+        let execution_id = ENV_VARS
+            .dune_force_execution_id
+            .as_ref()
+            .unwrap_or(execution_id);
+
         let url = format!("{}/execution/{execution_id}/status", BASE_URL);
-        let req = self
-            .reqwest
-            .get(url)
-            .header("X-Dune-API-Key", &ENV_VARS.dune_api_key);
+        let req = self.reqwest.get(url).authenticate();
 
         let res = req.send().await?;
         let status = res.status();
@@ -164,13 +219,19 @@ impl BlockchainSqlApi for DuneApi {
         }
     }
 
-    async fn get_execution_result(
+    async fn get_execution_results<T: for<'a> Deserialize<'a>>(
         &self,
-        execution_id: &str,
+        execution_id: &String,
         cursor: Option<Self::ExecutionResultCursor>,
-    ) -> Result<(Vec<LogData>, Option<i64>), SqlClientError> {
+    ) -> SqlClientResult<(Vec<T>, Option<i64>)> {
         const ATTEMPT_DELAYS: [u64; 6] = [0, 1, 3, 5, 7, 11];
+
+        let execution_id = ENV_VARS
+            .dune_force_execution_id
+            .as_ref()
+            .unwrap_or(execution_id);
         let cursor = cursor.unwrap_or(0);
+
         info!(self.logger, "requesting {PAGE_SIZE} results from execution id \"{execution_id}\" (offset = {cursor})");
 
         let url = format!(
@@ -183,10 +244,7 @@ impl BlockchainSqlApi for DuneApi {
         let res = loop {
             sleep(Duration::from_secs(ATTEMPT_DELAYS[retries])).await;
 
-            let req = self
-                .reqwest
-                .get(&url)
-                .header("x-dune-api-key", &ENV_VARS.dune_api_key);
+            let req = self.reqwest.get(&url).authenticate();
 
             let res = req.send().await?;
             let status = res.status();
@@ -210,7 +268,7 @@ impl BlockchainSqlApi for DuneApi {
 
         match status.is_success() {
             true => {
-                let object: GetExecutionResultResponse = serde_json::from_str(&text)?;
+                let object: GetExecutionResultResponse<T> = serde_json::from_str(&text)?;
 
                 Ok((object.result.rows, object.next_offset))
             }

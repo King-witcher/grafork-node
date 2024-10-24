@@ -16,12 +16,12 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
-authors = ["The Graph core developers & contributors"]
+authors = ["The Kattena developers"]
 readme = "README.md"
-homepage = "https://thegraph.com"
-repository = "https://github.com/graphprotocol/graph-node"
+homepage = "https://kattena.com"
+repository = "https://github.com/OriumNetwork/graph-node"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
