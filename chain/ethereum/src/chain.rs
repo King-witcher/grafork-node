@@ -3,7 +3,7 @@ use anyhow::{Context, Error};
 use graph::blockchain::client::ChainClient;
 use graph::blockchain::firehose_block_ingestor::{FirehoseBlockIngestor, Transforms};
 use graph::blockchain::{
-    BlockIngestor, BlockTime, BlockchainKind, ChainIdentifier, SqlFilterWithCursor,
+    BlockIngestor, BlockTime, BlockchainKind, ChainIdentifier, SubgraphSqlFilterTrait,
     TriggersAdapterSelector,
 };
 use graph::components::adapter::ChainId;
@@ -11,7 +11,6 @@ use graph::components::store::DeploymentCursorTracker;
 use graph::data::subgraph::UnifiedMappingApiVersion;
 use graph::firehose::{FirehoseEndpoint, ForkStep};
 use graph::futures03::compat::Future01CompatExt;
-use graph::log::logger;
 use graph::prelude::{
     BlockHash, ComponentLoggerConfig, ElasticComponentLoggerConfig, EthereumBlock,
     EthereumCallCache, LightEthereumBlock, LightEthereumBlockExt, MetricsRegistry,
@@ -565,9 +564,12 @@ impl Blockchain for Chain {
         Ok(ingestor)
     }
 
-    fn get_sql_filter(data_sources: &[DataSource]) -> Box<dyn SqlFilterWithCursor> {
+    fn get_sql_filter(
+        data_sources: &[DataSource],
+        current_block: Option<i32>,
+    ) -> Box<dyn SubgraphSqlFilterTrait> {
         Box::new(SubgraphSqlFilter {
-            cursor: None,
+            last_synced_block: current_block,
             data_sources: data_sources
                 .iter()
                 .map(|ds| DataSourceSqlFilter {
@@ -593,7 +595,7 @@ impl Blockchain for Chain {
 
     async fn new_sql_block_stream(
         &self,
-        filter: Box<dyn SqlFilterWithCursor>,
+        filter: Box<dyn SubgraphSqlFilterTrait>,
     ) -> Result<Box<dyn BlockStream<Self>>, Error> {
         let logger = self.logger_factory.component_logger("SqlBlockStream", None);
         let api = DuneApi::new(&logger);

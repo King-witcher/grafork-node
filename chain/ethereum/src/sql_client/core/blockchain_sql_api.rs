@@ -2,7 +2,7 @@ use graph::prelude::*;
 use serde::Deserialize;
 
 use crate::sql_client::core::data::LogData;
-use graph::blockchain::SqlFilterWithCursor;
+use graph::blockchain::SubgraphSqlFilterTrait;
 use std;
 use std::cmp::PartialEq;
 use std::future::Future;
@@ -37,11 +37,11 @@ pub enum QueryExecutionStatus {
 /// Represents a range where a query can be run with max results.
 #[derive(Debug, Deserialize)]
 pub struct BlockRange {
-    start_block_number: String,
-    start_log_index: String,
-    end_block_number: String,
-    end_log_index: String,
-    logs_count: u64,
+    pub start_block_number: String,
+    pub start_log_index: String,
+    pub end_block_number: String,
+    pub end_log_index: String,
+    pub logs_count: u64,
 }
 
 /// Represents an adapter interface for blockchain SQL services.
@@ -64,6 +64,8 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
     fn execute_get_logs(
         &self,
         filter: &str,
+        chain_id: &str,
+        block_range: &BlockRange,
     ) -> impl Future<Output = SqlClientResult<String>> + Send;
 
     fn get_execution_status(
@@ -127,7 +129,7 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
     fn execute_query_and_get_results(
         &self,
         logger: &Logger,
-        filter: &Box<dyn SqlFilterWithCursor>,
+        filter: &Box<dyn SubgraphSqlFilterTrait>,
     ) -> impl Future<Output = SqlClientResult<Vec<LogData>>> + Send
     where
         Self: Sync,
@@ -135,54 +137,103 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
         async move {
             let logger = logger.new(o!("component" => "BlockchainSqlApi"));
 
-            // Counts how many logs are there and decide whether to use Dune.
-
-            let network = filter.network();
-
-            let size = {
+            let (block_ranges, _) = {
                 let execution_id = self
-                    .execute_get_block_ranges(&filter.to_sql(), &network)
+                    .execute_get_block_ranges(&filter.to_sql(), &filter.chain_id())
                     .await?;
-                let _size = self.await_for_completed(&logger, &execution_id, 1).await?;
-                let (block_ranges, _) = self
-                    .get_execution_results::<BlockRange>(&execution_id, None)
-                    .await?;
-
-                block_ranges
-                    .into_iter()
-                    .fold(0u64, |sum, current| sum + current.logs_count)
-            };
-
-            // Aborts if the query is over the limit.
-            if size >= 10_000_000 {
-                return Err(SqlClientError::TooManyLogsError(size));
-            }
-
-            // Requests the query to run with the specified
-            let execution_id = self.execute_get_logs(&filter.to_sql()).await?;
-            let size = self.await_for_completed(&logger, &execution_id, 1).await?;
-
-            // Aggregate all results from get_execution_results in a single vector
-            let mut results: Vec<LogData> = Vec::new();
-            if size > 0 {
-                let mut cursor = None;
-                loop {
-                    let (mut new_results, next_cursor) =
-                        self.get_execution_results(&execution_id, cursor).await?;
-                    results.append(&mut new_results);
-                    if next_cursor.is_none() {
-                        break;
-                    }
-                    cursor = next_cursor;
-                }
-            }
+                self.await_for_completed(&logger, &execution_id, 1).await?;
+                self.get_execution_results::<BlockRange>(&execution_id, None)
+                    .await
+            }?;
 
             info!(
                 logger,
-                "got {} results from execution id \"{execution_id}\"",
-                results.len()
+                "found {} block ranges to be queried",
+                block_ranges.len(),
             );
-            Ok(results)
+
+            let full_size = get_full_size(self, &logger, filter).await?;
+
+            if full_size >= 10_000_000 {
+                return Err(SqlClientError::TooManyLogsError(full_size));
+            }
+
+            get_all_logs(self, &logger, filter, &block_ranges).await
         }
     }
+}
+
+/// Triggers a query that maps all block ranges, polls until it's ready and then returns the total amount of results a
+/// filter maps.
+async fn get_full_size(
+    client: &impl BlockchainSqlApi,
+    logger: &Logger,
+    filter: &Box<dyn SubgraphSqlFilterTrait>,
+) -> SqlClientResult<u64> {
+    let network = filter.chain_id();
+
+    let execution_id = client
+        .execute_get_block_ranges(&filter.to_sql(), &network)
+        .await?;
+
+    client
+        .await_for_completed(&logger, &execution_id, 1)
+        .await?;
+
+    let (block_ranges, _) = client
+        .get_execution_results::<BlockRange>(&execution_id, None)
+        .await?;
+
+    let size = block_ranges
+        .into_iter()
+        .fold(0u64, |sum, current| sum + current.logs_count);
+
+    Ok(size)
+}
+
+/// Triggers a query that maps logs from the blockchain, polls until it's ready and then returns the results.
+async fn get_all_logs(
+    client: &impl BlockchainSqlApi,
+    logger: &Logger,
+    filter: &Box<dyn SubgraphSqlFilterTrait>,
+    block_ranges: &Vec<BlockRange>,
+) -> SqlClientResult<Vec<LogData>> {
+    // Requests the query to run with the specified
+    let network = filter.chain_id();
+
+    // Aggregate all results from get_execution_results in a single vector
+    let mut results: Vec<LogData> = Vec::new();
+
+    for block_range in block_ranges {
+        info!(
+            logger,
+            "triggering get_logs for block range {:?}", block_range
+        );
+        let execution_id = client
+            .execute_get_logs(&filter.to_sql(), &network, block_range)
+            .await?;
+        let size = client
+            .await_for_completed(&logger, &execution_id, 1)
+            .await?;
+        if size > 0 {
+            let mut offset = None;
+            loop {
+                let (mut new_results, next_cursor) =
+                    client.get_execution_results(&execution_id, offset).await?;
+                results.append(&mut new_results);
+                if next_cursor.is_none() {
+                    break;
+                }
+                offset = next_cursor;
+            }
+        }
+
+        info!(
+            logger,
+            "got {} results from execution id \"{execution_id}\"",
+            results.len()
+        );
+    }
+
+    Ok(results)
 }

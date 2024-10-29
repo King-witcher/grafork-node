@@ -15,11 +15,11 @@ pub enum SqlClientError {
     ResponseError(StatusCode, String),
     #[error("error decoding response into JSON: {0}.")]
     JsonDecodeError(SerdeJsonError),
-    #[error("the query failed to execute: ")]
+    #[error("failed to execute query on external api due to {0} status")]
     ExecutionStatusError(String),
-    #[error("the query has too many logs ({0}) and is not allowed to use Kattena acceleration")]
+    #[error("query maps too many logs ({0}) and is not allowed to use Kattena acceleration")]
     TooManyLogsError(u64),
-    #[error("the networ ({0}) is not supported by Kattena accelerator")]
+    #[error(r#"blockchain "{0}" not supported by Kattena accelerator"#)]
     NotSupportedNetwork(String),
     #[error("other error: {0}")]
     OtherError(String),

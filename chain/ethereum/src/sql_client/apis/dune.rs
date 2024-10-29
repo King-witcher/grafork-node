@@ -2,7 +2,7 @@ use graph::prelude::*;
 use reqwest::{Client, RequestBuilder};
 
 use crate::sql_client::core::{BlockchainSqlApi, QueryExecutionStatus, SqlClientError};
-use crate::sql_client::SqlClientResult;
+use crate::sql_client::{BlockRange, SqlClientResult};
 
 use serde::Deserialize;
 use serde_json::json;
@@ -146,7 +146,12 @@ impl BlockchainSqlApi for DuneApi {
             .await
     }
 
-    async fn execute_get_logs(&self, filter: &str) -> SqlClientResult<String> {
+    async fn execute_get_logs(
+        &self,
+        filter: &str,
+        chain_id: &str,
+        block_range: &BlockRange,
+    ) -> SqlClientResult<String> {
         if let Some(execution_id) = &ENV_VARS.dune_force_execution_id {
             warn!(
                 self.logger,
@@ -156,9 +161,16 @@ impl BlockchainSqlApi for DuneApi {
         }
 
         info!(self.logger, "querying logs on Dune with filter {filter}");
+        let blockchain_id = DuneApi::get_dune_blockchain_id(chain_id)?;
 
         let params = json!({
-            "filter": filter
+            "filter": filter,
+            "blockchain_id": blockchain_id,
+            "start_log_index": block_range.start_log_index.parse::<i64>().unwrap(),
+            "end_log_index": block_range.end_log_index.parse::<i64>().unwrap(),
+            "start_block_number": block_range.start_block_number.parse::<i64>().unwrap(),
+            "end_block_number": block_range.end_block_number.parse::<i64>().unwrap(),
+            "limit": ENV_VARS.dune_query_limit.to_string(),
         });
 
         self.execute_query(&ENV_VARS.dune_logs_query, params).await

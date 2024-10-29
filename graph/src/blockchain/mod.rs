@@ -216,47 +216,40 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
     async fn block_ingestor(&self) -> anyhow::Result<Box<dyn BlockIngestor>>;
 
     /// Gets a filter that can be converted into SQL
-    fn get_sql_filter(_data_sources: &[Self::DataSource]) -> Box<dyn SqlFilterWithCursor> {
+    fn get_sql_filter(
+        _data_sources: &[Self::DataSource],
+        _current_block: Option<i32>,
+    ) -> Box<dyn SubgraphSqlFilterTrait> {
         unimplemented!("not implemented");
     }
 
     /// Gets an ethereum sql stream
     async fn new_sql_block_stream(
         &self,
-        _filter: Box<dyn SqlFilterWithCursor>,
+        _filter: Box<dyn SubgraphSqlFilterTrait>,
     ) -> Result<Box<dyn BlockStream<Self>>, Error> {
         Err(anyhow!("not implemented"))
     }
 }
 
 /// Represents all types that can be converted into and SQL filter.
-pub trait SqlFilterWithCursor: Send + Sync {
-    fn network(&self) -> String;
+pub trait SubgraphSqlFilterTrait: Send + Sync {
+    /// Gets the chain id from which the subgraph will map events.
+    /// Represented in the graph-node's naming convention.
+    fn chain_id(&self) -> String;
 
+    /// Gets the SQL filter that queries the wanted events from the database.
     fn to_sql(&self) -> String;
-
-    /// Gets the cursor of the filter as a tuple of (block_number, log_index).
-    fn cursor(&self) -> Option<(i32, i32)>;
-
-    fn set_cursor(&mut self, filter: Option<(i32, i32)>);
 }
 
 // Workaround to make the default implementation compile.
-impl SqlFilterWithCursor for () {
-    fn network(&self) -> String {
+impl SubgraphSqlFilterTrait for () {
+    fn chain_id(&self) -> String {
         String::new()
     }
 
     fn to_sql(&self) -> String {
         String::new()
-    }
-
-    fn cursor(&self) -> Option<(i32, i32)> {
-        unimplemented!()
-    }
-
-    fn set_cursor(&mut self, _: Option<(i32, i32)>) {
-        unimplemented!()
     }
 }
 

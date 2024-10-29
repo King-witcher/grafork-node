@@ -1,16 +1,15 @@
+use graph::blockchain::SubgraphSqlFilterTrait;
 use graph::prelude::*;
 
-use graph::blockchain::SqlFilterWithCursor;
 use graph::itertools::Itertools;
 use graph::prelude::ethabi::ethereum_types::H256;
 use web3::types::Address;
 
 /// Represents a filter to applied in one single client query. The client usually have a limit on how many
-/// queries can be returned from one query; so, many queries might be needed with different cursors.subg
+/// logs can be returned from one query; so, many queries might be needed with different cursors.
 pub struct SubgraphSqlFilter {
-    /// The event after which the query will start (block_number, log_index) from which the current query will be start.
-    /// This is useful for paginated queries, when the api can't return all values in one query.
-    pub cursor: Option<(i32, i32)>,
+    /// The last synced block on the subgraph.
+    pub last_synced_block: Option<i32>,
 
     pub data_sources: Vec<DataSourceSqlFilter>,
 }
@@ -31,8 +30,8 @@ pub struct EventHandlerSqlFilter {
     pub topic3: Vec<H256>,
 }
 
-impl SqlFilterWithCursor for SubgraphSqlFilter {
-    fn network(&self) -> String {
+impl SubgraphSqlFilterTrait for SubgraphSqlFilter {
+    fn chain_id(&self) -> String {
         if self.data_sources.len() == 0 {
             String::new()
         } else {
@@ -44,9 +43,9 @@ impl SqlFilterWithCursor for SubgraphSqlFilter {
     fn to_sql(&self) -> String {
         let mut result = String::new();
 
-        // Subgraph cursor
-        if let Some((block_number, log_index)) = self.cursor {
-            let clause = format!("((block_number = {block_number} AND index > {log_index}) OR block_number > {block_number}) AND ");
+        // Continue from the last synced block, if any.
+        if let Some(block_number) = self.last_synced_block {
+            let clause = format!("(block_number > {block_number}) AND ");
             result += &clause;
         }
 
@@ -63,14 +62,6 @@ impl SqlFilterWithCursor for SubgraphSqlFilter {
         }
 
         result
-    }
-
-    fn cursor(&self) -> Option<(i32, i32)> {
-        self.cursor
-    }
-
-    fn set_cursor(&mut self, cursor: Option<(i32, i32)>) {
-        self.cursor = cursor;
     }
 }
 

@@ -482,7 +482,7 @@ struct Inner {
 
     #[envconfig(from = "DUNE_BLOCK_RANGES_QUERY", default = "4117175")]
     dune_block_ranges_query: String,
-    #[envconfig(from = "DUNE_LOGS_QUERY", default = "4041328")]
+    #[envconfig(from = "DUNE_LOGS_QUERY", default = "4125241")]
     dune_logs_query: String,
 }
 

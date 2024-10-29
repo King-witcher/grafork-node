@@ -1,7 +1,7 @@
 use crate::subgraph::inputs::IndexingInputs;
 use anyhow::bail;
 use graph::blockchain::block_stream::{BlockStream, BufferedBlockStream};
-use graph::blockchain::{Blockchain, SqlFilterWithCursor};
+use graph::blockchain::{Blockchain, SubgraphSqlFilterTrait};
 use graph::prelude::{CheapClone, Error, SubgraphInstanceMetrics};
 use std::sync::Arc;
 
@@ -38,7 +38,7 @@ pub async fn new_block_stream<C: Blockchain>(
 
 pub async fn new_sql_stream<C: Blockchain>(
     inputs: &IndexingInputs<C>,
-    filter: Box<dyn SqlFilterWithCursor>,
+    filter: Box<dyn SubgraphSqlFilterTrait>,
     _metrics: &SubgraphInstanceMetrics,
 ) -> Result<Box<dyn BlockStream<C>>, Error> {
     let sql_block_stream = inputs.chain.new_sql_block_stream(filter).await?;

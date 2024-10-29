@@ -284,14 +284,14 @@ where
             .map(Clone::clone)
             .collect_vec();
 
-        let mut sql_filter = C::get_sql_filter(&data_sources);
-
         // Gets the current block and uses it as the cursor for the sql block stream.
-        let cursor = match self.inputs.store.block_ptr() {
-            Some(block_ptr) => Some((block_ptr.number + 1, 0)),
-            None => None,
-        };
-        sql_filter.set_cursor(cursor);
+        let current_block = self
+            .inputs
+            .store
+            .block_ptr()
+            .map(|block_ptr| block_ptr.number);
+
+        let sql_filter = C::get_sql_filter(&data_sources, current_block);
 
         let mut sql_block_stream = new_sql_stream(&self.inputs, sql_filter, &self.metrics.subgraph)
             .await?
