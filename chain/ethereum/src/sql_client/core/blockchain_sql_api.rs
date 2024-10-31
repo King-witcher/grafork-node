@@ -137,22 +137,17 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
         async move {
             let logger = logger.new(o!("component" => "BlockchainSqlApi"));
 
-            let (block_ranges, _) = {
-                let execution_id = self
-                    .execute_get_block_ranges(&filter.to_sql(), &filter.chain_id())
-                    .await?;
-                self.await_for_completed(&logger, &execution_id, 1).await?;
-                self.get_execution_results::<BlockRange>(&execution_id, None)
-                    .await
-            }?;
+            let block_ranges = get_block_ranges(self, &logger, filter).await?;
+
+            let full_size = block_ranges
+                .iter()
+                .fold(0u64, |sum, current| sum + current.logs_count);
 
             info!(
                 logger,
-                "found {} block ranges to be queried",
+                "found {} block ranges to be queried, {full_size} total results",
                 block_ranges.len(),
             );
-
-            let full_size = get_full_size(self, &logger, filter).await?;
 
             if full_size >= 10_000_000 {
                 return Err(SqlClientError::TooManyLogsError(full_size));
@@ -165,11 +160,11 @@ pub trait BlockchainSqlApi: Send + Sync + Clone + 'static {
 
 /// Triggers a query that maps all block ranges, polls until it's ready and then returns the total amount of results a
 /// filter maps.
-async fn get_full_size(
+async fn get_block_ranges(
     client: &impl BlockchainSqlApi,
     logger: &Logger,
     filter: &Box<dyn SubgraphSqlFilterTrait>,
-) -> SqlClientResult<u64> {
+) -> SqlClientResult<Vec<BlockRange>> {
     let network = filter.chain_id();
 
     let execution_id = client
@@ -184,11 +179,7 @@ async fn get_full_size(
         .get_execution_results::<BlockRange>(&execution_id, None)
         .await?;
 
-    let size = block_ranges
-        .into_iter()
-        .fold(0u64, |sum, current| sum + current.logs_count);
-
-    Ok(size)
+    Ok(block_ranges)
 }
 
 /// Triggers a query that maps logs from the blockchain, polls until it's ready and then returns the results.
