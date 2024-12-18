@@ -345,8 +345,8 @@ where
             //     )
             //         .await?
             // },
-            BlockchainKind::Ethereum => Ok(
-                create_subgraph_version::<graph_chain_ethereum::Chain, _>(
+            BlockchainKind::Ethereum => {
+                Ok(create_subgraph_version::<graph_chain_ethereum::Chain, _>(
                     &logger,
                     self.store.clone(),
                     self.chains.cheap_clone(),
@@ -361,8 +361,8 @@ where
                     &self.resolver,
                     history_blocks,
                 )
-                .await?
-            ),
+                .await?)
+            }
             // BlockchainKind::Near => {
             //     create_subgraph_version::<graph_chain_near::Chain, _>(
             //         &logger,
@@ -435,9 +435,9 @@ where
             //     )
             //         .await?
             // }
-            _ => Err(SubgraphRegistrarError::ManifestValidationError(
-                vec![SubgraphManifestValidationError::BlockchainNotSupported]
-            ))
+            _ => Err(SubgraphRegistrarError::ManifestValidationError(vec![
+                SubgraphManifestValidationError::BlockchainNotSupported,
+            ])),
         }?;
 
         debug!(
@@ -492,6 +492,26 @@ where
             locator.ok_or_else(|| SubgraphRegistrarError::DeploymentNotFound(hash.to_string()))?;
 
         self.store.resume_subgraph(&deployment)?;
+
+        Ok(())
+    }
+
+    fn unassign_deployment(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError> {
+        let locator = self.store.active_locator(hash)?;
+        let deployment =
+            locator.ok_or_else(|| SubgraphRegistrarError::DeploymentNotFound(hash.to_string()))?;
+
+        self.store.unassign_subgraph(&deployment)?;
+
+        Ok(())
+    }
+
+    fn remove_deployment(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError> {
+        let locator = self.store.active_locator(hash)?;
+        let deployment =
+            locator.ok_or_else(|| SubgraphRegistrarError::DeploymentNotFound(hash.to_string()))?;
+
+        self.store.remove_deployment(&deployment)?;
 
         Ok(())
     }

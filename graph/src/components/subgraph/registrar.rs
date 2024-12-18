@@ -58,4 +58,8 @@ pub trait SubgraphRegistrar: Send + Sync + 'static {
     async fn pause_subgraph(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError>;
 
     async fn resume_subgraph(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError>;
+
+    fn unassign_deployment(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError>;
+
+    fn remove_deployment(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError>;
 }

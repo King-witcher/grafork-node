@@ -78,6 +78,11 @@ impl JsonRpcServer {
                 state.resume_handler(params.parse()?).await
             })
             .unwrap();
+        rpc_module
+            .register_async_method("deployment_drop", |params, state| async move {
+                state.drop_deployment_handler(params.parse()?).await
+            })
+            .unwrap();
 
         let _handle = http_server.start(rpc_module)?;
         Ok(Self { _handle })
@@ -99,6 +104,7 @@ impl<R: SubgraphRegistrar> ServerState<R> {
     const REASSIGN_ERROR: i64 = 3;
     const PAUSE_ERROR: i64 = 4;
     const RESUME_ERROR: i64 = 5;
+    const DROP_ERROR: i64 = 6;
 
     /// Handler for the `subgraph_create` endpoint.
     async fn create_handler(&self, params: SubgraphCreateParams) -> JsonRpcResult<JsonValue> {
@@ -217,6 +223,38 @@ impl<R: SubgraphRegistrar> ServerState<R> {
             )),
         }
     }
+
+    /// Handler for the `deployment_drop` endpoint.
+    async fn drop_deployment_handler(
+        &self,
+        params: DeploymentDropParams,
+    ) -> JsonRpcResult<GraphValue> {
+        info!(&self.logger, "Received deployment_drop request"; "params" => format!("{:?}", params));
+
+        // Fist, unassign the deployment to stop it from syncing.
+        if let Err(e) = self.registrar.unassign_deployment(&params.deployment) {
+            return Err(json_rpc_error(
+                &self.logger,
+                "deployment_drop",
+                e,
+                Self::DROP_ERROR,
+                params,
+            ));
+        }
+
+        // Then, remove the deployment. If the deployment is already assigned to a version, this will return an error.
+        if let Err(e) = self.registrar.remove_deployment(&params.deployment) {
+            return Err(json_rpc_error(
+                &self.logger,
+                "deployment_drop",
+                e,
+                Self::DROP_ERROR,
+                params,
+            ));
+        }
+
+        return Ok(Value::String("done dropping deployment".into()));
+    }
 }
 
 fn json_rpc_error(
@@ -297,5 +335,10 @@ struct SubgraphReassignParams {
 
 #[derive(Debug, Deserialize)]
 struct SubgraphPauseParams {
+    deployment: DeploymentHash,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeploymentDropParams {
     deployment: DeploymentHash,
 }
