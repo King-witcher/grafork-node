@@ -327,26 +327,26 @@ where
             history_blocks.or(self.settings.for_name(&name).map(|c| c.history_blocks));
 
         let deployment_locator = match kind {
-            BlockchainKind::Arweave => {
-                create_subgraph_version::<graph_chain_arweave::Chain, _>(
-                    &logger,
-                    self.store.clone(),
-                    self.chains.cheap_clone(),
-                    name.clone(),
-                    hash.cheap_clone(),
-                    start_block_override,
-                    graft_block_override,
-                    raw,
-                    node_id,
-                    debug_fork,
-                    self.version_switching_mode,
-                    &self.resolver,
-                    history_blocks,
-                )
-                .await?
-            }
+            // BlockchainKind::Arweave => {
+            //     create_subgraph_version::<graph_chain_arweave::Chain, _>(
+            //         &logger,
+            //         self.store.clone(),
+            //         self.chains.cheap_clone(),
+            //         name.clone(),
+            //         hash.cheap_clone(),
+            //         start_block_override,
+            //         graft_block_override,
+            //         raw,
+            //         node_id,
+            //         debug_fork,
+            //         self.version_switching_mode,
+            //         &self.resolver,
+            //         history_blocks,
+            //     )
+            //         .await?
+            // },
             BlockchainKind::Ethereum => {
-                create_subgraph_version::<graph_chain_ethereum::Chain, _>(
+                Ok(create_subgraph_version::<graph_chain_ethereum::Chain, _>(
                     &logger,
                     self.store.clone(),
                     self.chains.cheap_clone(),
@@ -361,81 +361,84 @@ where
                     &self.resolver,
                     history_blocks,
                 )
-                .await?
+                .await?)
             }
-            BlockchainKind::Near => {
-                create_subgraph_version::<graph_chain_near::Chain, _>(
-                    &logger,
-                    self.store.clone(),
-                    self.chains.cheap_clone(),
-                    name.clone(),
-                    hash.cheap_clone(),
-                    start_block_override,
-                    graft_block_override,
-                    raw,
-                    node_id,
-                    debug_fork,
-                    self.version_switching_mode,
-                    &self.resolver,
-                    history_blocks,
-                )
-                .await?
-            }
-            BlockchainKind::Cosmos => {
-                create_subgraph_version::<graph_chain_cosmos::Chain, _>(
-                    &logger,
-                    self.store.clone(),
-                    self.chains.cheap_clone(),
-                    name.clone(),
-                    hash.cheap_clone(),
-                    start_block_override,
-                    graft_block_override,
-                    raw,
-                    node_id,
-                    debug_fork,
-                    self.version_switching_mode,
-                    &self.resolver,
-                    history_blocks,
-                )
-                .await?
-            }
-            BlockchainKind::Substreams => {
-                create_subgraph_version::<graph_chain_substreams::Chain, _>(
-                    &logger,
-                    self.store.clone(),
-                    self.chains.cheap_clone(),
-                    name.clone(),
-                    hash.cheap_clone(),
-                    start_block_override,
-                    graft_block_override,
-                    raw,
-                    node_id,
-                    debug_fork,
-                    self.version_switching_mode,
-                    &self.resolver,
-                    history_blocks,
-                )
-                .await?
-            }
-            BlockchainKind::Starknet => {
-                create_subgraph_version::<graph_chain_starknet::Chain, _>(
-                    &logger,
-                    self.store.clone(),
-                    self.chains.cheap_clone(),
-                    name.clone(),
-                    hash.cheap_clone(),
-                    start_block_override,
-                    graft_block_override,
-                    raw,
-                    node_id,
-                    debug_fork,
-                    self.version_switching_mode,
-                    &self.resolver,
-                    history_blocks,
-                )
-                .await?
-            }
-        };
+            // BlockchainKind::Near => {
+            //     create_subgraph_version::<graph_chain_near::Chain, _>(
+            //         &logger,
+            //         self.store.clone(),
+            //         self.chains.cheap_clone(),
+            //         name.clone(),
+            //         hash.cheap_clone(),
+            //         start_block_override,
+            //         graft_block_override,
+            //         raw,
+            //         node_id,
+            //         debug_fork,
+            //         self.version_switching_mode,
+            //         &self.resolver,
+            //         history_blocks,
+            //     )
+            //         .await?
+            // }
+            // BlockchainKind::Cosmos => {
+            //     create_subgraph_version::<graph_chain_cosmos::Chain, _>(
+            //         &logger,
+            //         self.store.clone(),
+            //         self.chains.cheap_clone(),
+            //         name.clone(),
+            //         hash.cheap_clone(),
+            //         start_block_override,
+            //         graft_block_override,
+            //         raw,
+            //         node_id,
+            //         debug_fork,
+            //         self.version_switching_mode,
+            //         &self.resolver,
+            //         history_blocks,
+            //     )
+            //         .await?
+            // }
+            // BlockchainKind::Substreams => {
+            //     create_subgraph_version::<graph_chain_substreams::Chain, _>(
+            //         &logger,
+            //         self.store.clone(),
+            //         self.chains.cheap_clone(),
+            //         name.clone(),
+            //         hash.cheap_clone(),
+            //         start_block_override,
+            //         graft_block_override,
+            //         raw,
+            //         node_id,
+            //         debug_fork,
+            //         self.version_switching_mode,
+            //         &self.resolver,
+            //         history_blocks,
+            //     )
+            //         .await?
+            // }
+            // BlockchainKind::Starknet => {
+            //     create_subgraph_version::<graph_chain_starknet::Chain, _>(
+            //         &logger,
+            //         self.store.clone(),
+            //         self.chains.cheap_clone(),
+            //         name.clone(),
+            //         hash.cheap_clone(),
+            //         start_block_override,
+            //         graft_block_override,
+            //         raw,
+            //         node_id,
+            //         debug_fork,
+            //         self.version_switching_mode,
+            //         &self.resolver,
+            //         history_blocks,
+            //     )
+            //         .await?
+            // }
+            _ => Err(SubgraphRegistrarError::ManifestValidationError(vec![
+                SubgraphManifestValidationError::BlockchainNotSupported,
+            ])),
+        }?;
 
         debug!(
             &logger,
@@ -489,6 +492,26 @@ where
             locator.ok_or_else(|| SubgraphRegistrarError::DeploymentNotFound(hash.to_string()))?;
 
         self.store.resume_subgraph(&deployment)?;
+
+        Ok(())
+    }
+
+    fn unassign_deployment(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError> {
+        let locator = self.store.active_locator(hash)?;
+        let deployment =
+            locator.ok_or_else(|| SubgraphRegistrarError::DeploymentNotFound(hash.to_string()))?;
+
+        self.store.unassign_subgraph(&deployment)?;
+
+        Ok(())
+    }
+
+    fn remove_deployment(&self, hash: &DeploymentHash) -> Result<(), SubgraphRegistrarError> {
+        let locator = self.store.active_locator(hash)?;
+        let deployment =
+            locator.ok_or_else(|| SubgraphRegistrarError::DeploymentNotFound(hash.to_string()))?;
+
+        self.store.remove_deployment(&deployment)?;
 
         Ok(())
     }

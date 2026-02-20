@@ -883,12 +883,14 @@ impl SubgraphStoreInner {
             store.drop_deployment(&site)?;
 
             self.primary_conn()?.drop_site(site.as_ref())?;
+            Ok(())
         } else {
             self.primary_conn()?
                 .unused_deployment_is_used(site.as_ref())?;
+            Err(StoreError::ConstraintViolation(format!(
+                "the deployment {id} is in use and cannot be removed"
+            )))
         }
-
-        Ok(())
     }
 
     pub fn status_for_id(&self, id: graph::components::store::DeploymentId) -> status::Info {
@@ -1349,6 +1351,21 @@ impl SubgraphStoreTrait for SubgraphStore {
             let changes = pconn.remove_subgraph(name)?;
             pconn.send_store_event(&self.sender, &StoreEvent::new(changes))
         })
+    }
+
+    fn unassign_subgraph(&self, deployment: &DeploymentLocator) -> Result<(), StoreError> {
+        let site = self.find_site(deployment.id.into())?;
+        let mut pconn = self.primary_conn()?;
+        pconn.transaction(|conn| -> Result<_, StoreError> {
+            let mut pconn = primary::Connection::new(conn);
+            let changes = pconn.unassign_subgraph(&site)?;
+            pconn.send_store_event(&self.sender, &StoreEvent::new(changes))
+        })
+    }
+
+    fn remove_deployment(&self, deployment: &DeploymentLocator) -> Result<(), StoreError> {
+        let site = self.find_site(deployment.id.into())?;
+        self.inner.remove_deployment(site.id)
     }
 
     fn reassign_subgraph(

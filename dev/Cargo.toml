@@ -1,0 +1,8 @@
+[package]
+name = "dev"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+graph-chain-ethereum = { path = "../chain/ethereum" }
+graph = { path = "../graph" }

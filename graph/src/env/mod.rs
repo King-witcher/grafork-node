@@ -221,6 +221,18 @@ pub struct EnvVars {
     /// How long do we wait for a response from the provider before considering that it is unavailable.
     /// Default is 30s.
     pub genesis_validation_timeout: Duration,
+
+    /// The Dune API Key
+    pub dune_api_key: String,
+    /// How many logs can be fetched in one single Dune Query
+    pub dune_query_limit: u32,
+    /// Forces Kattena Node to run a specific execution id regardless of what subgraph you pass.
+    /// Used only for debugging  
+    pub dune_force_execution_id: Option<String>,
+    /// The query id of the "get block ranges" query
+    pub dune_block_ranges_query: String,
+    /// The query id of the "get logs" query
+    pub dune_logs_query: String,
 }
 
 impl EnvVars {
@@ -305,6 +317,12 @@ impl EnvVars {
             firehose_grpc_max_decode_size_mb: inner.firehose_grpc_max_decode_size_mb,
             genesis_validation_enabled: inner.genesis_validation_enabled.0,
             genesis_validation_timeout: Duration::from_secs(inner.genesis_validation_timeout),
+
+            dune_api_key: inner.dune_api_key,
+            dune_query_limit: inner.dune_query_limit,
+            dune_force_execution_id: inner.dune_force_execution_id,
+            dune_block_ranges_query: inner.dune_block_ranges_query,
+            dune_logs_query: inner.dune_logs_query,
         })
     }
 
@@ -454,6 +472,18 @@ struct Inner {
     genesis_validation_enabled: EnvVarBoolean,
     #[envconfig(from = "GRAPH_NODE_GENESIS_VALIDATION_TIMEOUT_SECONDS", default = "30")]
     genesis_validation_timeout: u64,
+
+    #[envconfig(from = "DUNE_API_KEY")]
+    dune_api_key: String,
+    #[envconfig(from = "DUNE_QUERY_LIMIT", default = "1000000")]
+    dune_query_limit: u32,
+    #[envconfig(from = "DUNE_FORCE_EXECUTION_ID")]
+    dune_force_execution_id: Option<String>,
+
+    #[envconfig(from = "DUNE_BLOCK_RANGES_QUERY", default = "4117175")]
+    dune_block_ranges_query: String,
+    #[envconfig(from = "DUNE_LOGS_QUERY", default = "4125241")]
+    dune_logs_query: String,
 }
 
 #[derive(Clone, Debug)]

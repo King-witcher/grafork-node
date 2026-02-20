@@ -33,3 +33,8 @@ lcov.info
 # Docker volumes and debug logs
 .postgres
 logfile
+
+# Dev testing folder
+/dev/target
+
+/run-*.sh

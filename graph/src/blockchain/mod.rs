@@ -214,6 +214,43 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
     fn chain_client(&self) -> Arc<ChainClient<Self>>;
 
     async fn block_ingestor(&self) -> anyhow::Result<Box<dyn BlockIngestor>>;
+
+    /// Gets a filter that can be converted into SQL
+    fn get_sql_filter(
+        _data_sources: &[Self::DataSource],
+        _current_block: Option<i32>,
+    ) -> Box<dyn SubgraphSqlFilterTrait> {
+        unimplemented!("not implemented");
+    }
+
+    /// Gets an ethereum sql stream
+    async fn new_sql_block_stream(
+        &self,
+        _filter: Box<dyn SubgraphSqlFilterTrait>,
+    ) -> Result<Box<dyn BlockStream<Self>>, Error> {
+        Err(anyhow!("not implemented"))
+    }
+}
+
+/// Represents all types that can be converted into and SQL filter.
+pub trait SubgraphSqlFilterTrait: Send + Sync {
+    /// Gets the chain id from which the subgraph will map events.
+    /// Represented in the graph-node's naming convention.
+    fn chain_id(&self) -> String;
+
+    /// Gets the SQL filter that queries the wanted events from the database.
+    fn to_sql(&self) -> String;
+}
+
+// Workaround to make the default implementation compile.
+impl SubgraphSqlFilterTrait for () {
+    fn chain_id(&self) -> String {
+        String::new()
+    }
+
+    fn to_sql(&self) -> String {
+        String::new()
+    }
 }
 
 #[derive(Error, Debug)]
